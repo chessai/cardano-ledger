@@ -60,7 +60,7 @@ import Data.Coders (decodeMap, decodeRecordNamed, encodeMap)
 import Data.Foldable (Foldable (..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.MapExtras (filterMaybe, intersectDomPLeft)
+import Data.MapExtras (intersectDomPLeft)
 import Data.Maybe.Strict (StrictMaybe (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -199,7 +199,7 @@ unView (Ptrs um) = um
 
 -- | This is expensive, use it wisely (like maybe once per epoch boundary to make a SnapShot)
 unUnify :: Ord cred => View coin cred pool ptr k v -> Map k v
-unUnify (Rewards (UnifiedMap tripmap _)) = filterMaybe ok tripmap
+unUnify (Rewards (UnifiedMap tripmap _)) = Map.mapMaybeWithKey ok tripmap
   where
     ok _key (Triple (SJust c) _ _) = Just c
     ok _ _ = Nothing
@@ -448,10 +448,10 @@ isNull (Delegations (UnifiedMap tripmap _)) = all nothing tripmap
 isNull (Ptrs (UnifiedMap _ ptrmap)) = Map.null ptrmap
 
 domain :: (Ord cr) => View coin cr pool ptr k v -> Set k
-domain (Rewards (UnifiedMap tripmap _)) = Map.keysSet (filterMaybe ok tripmap)
+domain (Rewards (UnifiedMap tripmap _)) = Map.foldlWithKey' accum Set.empty tripmap
   where
-    ok _key (Triple (SJust c) _ _) = Just c
-    ok _ _ = Nothing
+    accum ans k (Triple (SJust _) _ _) = Set.insert k ans
+    accum ans _ _ = ans
 domain (Delegations (UnifiedMap tripmap _)) = Map.foldlWithKey' accum Set.empty tripmap
   where
     accum ans k (Triple _ _ (SJust _)) = Set.insert k ans
@@ -467,7 +467,8 @@ range (Delegations (UnifiedMap tripmap _)) = Map.foldlWithKey' accum Set.empty t
   where
     accum ans _ (Triple _ _ (SJust v)) = Set.insert v ans
     accum ans _ (Triple _ _ SNothing) = ans
-range (Ptrs (UnifiedMap _tripmap ptrmap)) = Set.fromList (Map.elems ptrmap) -- tripmap is the inverse of ptrmap
+range (Ptrs (UnifiedMap _tripmap ptrmap)) =
+  Set.fromList (Map.elems ptrmap) -- tripmap is the inverse of ptrmap
 
 -- =============================================================
 -- evalUnified (Rewards u1 ∪ singleton hk mempty)
