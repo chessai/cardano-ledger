@@ -3,12 +3,10 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -96,7 +94,7 @@ data Trip coin ptr pool
   | TEFE !(Set ptr)
   | TEFF !(Set ptr) !pool
   | TFEE !coin
-  | TFEF !coin pool
+  | TFEF !coin !pool
   | TFFE !coin !(Set ptr)
   | TFFF !coin !(Set ptr) !pool
   deriving (Eq, Ord, Generic, NoThunks, NFData)
@@ -135,7 +133,7 @@ instance (Show coin, Show pool, Show ptr) => Show (Trip coin ptr pool) where
 
 -- =====================================================
 
-data UMap coin cred pool ptr = UnifiedMap (Map cred (Trip coin ptr pool)) (Map ptr cred)
+data UMap coin cred pool ptr = UnifiedMap !(Map cred (Trip coin ptr pool)) !(Map ptr cred)
   deriving (Show, Eq, Generic, NoThunks, NFData)
 
 -- | It is worthwhie stating the invariant that holds on a Unified Map
@@ -145,7 +143,7 @@ umInvariant stake ptr (UnifiedMap tripmap ptrmap) = forwards && backwards
   where
     forwards =
       case Map.lookup stake tripmap of
-        Nothing -> all (\cred -> not (stake == cred)) ptrmap
+        Nothing -> all (stake /=) ptrmap
         Just (Triple _c set _d) ->
           if Set.member ptr set
             then case Map.lookup ptr ptrmap of
@@ -154,7 +152,7 @@ umInvariant stake ptr (UnifiedMap tripmap ptrmap) = forwards && backwards
             else True
     backwards =
       case Map.lookup ptr ptrmap of
-        Nothing -> all (\(Triple _ set _) -> not (Set.member ptr set)) tripmap
+        Nothing -> all (\(Triple _ set _) -> Set.notMember ptr set) tripmap
         Just cred ->
           case Map.lookup cred tripmap of
             Nothing -> False
@@ -164,13 +162,13 @@ umInvariant stake ptr (UnifiedMap tripmap ptrmap) = forwards && backwards
 
 data View coin cr pl ptr k v where
   Rewards ::
-    UMap coin cr pl ptr ->
+    !(UMap coin cr pl ptr) ->
     View coin cr pl ptr cr coin
   Delegations ::
-    UMap coin cr pl ptr ->
+    !(UMap coin cr pl ptr) ->
     View coin cr pl ptr cr pl
   Ptrs ::
-    UMap coin cr pl ptr ->
+    !(UMap coin cr pl ptr) ->
     View coin cr pl ptr ptr cr
 
 -- ==================================================
